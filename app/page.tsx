@@ -27,7 +27,7 @@ type FieldConfig = {
 
 const today = new Date().toISOString().slice(0, 10);
 
-const baseFields: FieldConfig[] = [
+const primaryFields: FieldConfig[] = [
   { key: "date", label: "Date", type: "date", required: true },
   { key: "title", label: "Title", type: "text", required: true },
   { key: "url", label: "URL", type: "url" },
@@ -39,8 +39,23 @@ const baseFields: FieldConfig[] = [
   { key: "follows", label: "Follows", type: "number" },
   { key: "watch_time", label: "Watch Time", type: "number" },
   { key: "duration", label: "Duration", type: "number" },
+  { key: "accounts_reached", label: "Accounts Reached", type: "number" }
+];
+
+const audienceFields: FieldConfig[] = [
   { key: "views_followers", label: "Views (Followers)", type: "number" },
   { key: "views_non_followers", label: "Views (Non-followers)", type: "number" },
+  { key: "this_reels_skip_rate", label: "This reel's skip rate", type: "number" },
+  { key: "typical_skip_rate", label: "Typical skip rate", type: "number" },
+  { key: "average_watch_time", label: "Average watch time", type: "number" },
+  { key: "audience_men", label: "Audience (Men)", type: "number" },
+  { key: "audience_women", label: "Audience (Women)", type: "number" },
+  { key: "audience_country", label: "Audience (Country)", type: "text" },
+  { key: "audience_age", label: "Audience (Age)", type: "text" },
+  { key: "top_source_of_views", label: "Top source of views", type: "text" }
+];
+
+const overTimeFields: FieldConfig[] = [
   { key: "views_over_time_all", label: "Views over time (All)", type: "textarea" },
   {
     key: "views_over_time_followers",
@@ -51,16 +66,7 @@ const baseFields: FieldConfig[] = [
     key: "views_over_time_non_followers",
     label: "Views over time (Non-followers)",
     type: "textarea"
-  },
-  { key: "top_source_of_views", label: "Top source of views", type: "text" },
-  { key: "accounts_reached", label: "Accounts Reached", type: "number" },
-  { key: "this_reels_skip_rate", label: "This reel's skip rate", type: "number" },
-  { key: "typical_skip_rate", label: "Typical skip rate", type: "number" },
-  { key: "average_watch_time", label: "Average watch time", type: "number" },
-  { key: "audience_men", label: "Audience (Men)", type: "number" },
-  { key: "audience_women", label: "Audience (Women)", type: "number" },
-  { key: "audience_country", label: "Audience (Country)", type: "text" },
-  { key: "audience_age", label: "Audience (Age)", type: "text" }
+  }
 ];
 
 const secFields: FieldConfig[] = Array.from({ length: 91 }, (_, second) => ({
@@ -69,7 +75,7 @@ const secFields: FieldConfig[] = Array.from({ length: 91 }, (_, second) => ({
   type: "number"
 }));
 
-const fields = [...baseFields, ...secFields];
+const fields = [...primaryFields, ...audienceFields, ...overTimeFields, ...secFields];
 
 const createInitialForm = () => {
   const initial: FormState = {};
@@ -134,39 +140,53 @@ export default function Home() {
     setMessage("Saved metric entry");
   };
 
+  const renderFields = (group: FieldConfig[], gridClassName = "grid") => (
+    <div className={gridClassName}>
+      {group.map((field) => (
+        <label key={field.key}>
+          {field.label}
+          {field.required ? "*" : ""}
+          {field.type === "textarea" ? (
+            <textarea
+              required={field.required}
+              value={form[field.key]}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+            />
+          ) : (
+            <input
+              type={field.type}
+              required={field.required}
+              value={form[field.key]}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+            />
+          )}
+        </label>
+      ))}
+    </div>
+  );
+
   return (
     <main>
-      <h1>Reels Metrics Database</h1>
-      <p className="subtitle">Enter and store reel snapshots with your new full schema.</p>
+      <header className="page-header">
+        <h1>Reels Metrics Database</h1>
+        <p className="subtitle">Structured form for clean manual reel snapshots.</p>
+      </header>
 
       <section className="card">
         <form onSubmit={onSubmit}>
-          <div className="grid">
-            {fields.map((field) => (
-              <label key={field.key}>
-                {field.label}
-                {field.required ? "*" : ""}
-                {field.type === "textarea" ? (
-                  <textarea
-                    required={field.required}
-                    value={form[field.key]}
-                    onChange={(event) =>
-                      setForm({ ...form, [field.key]: event.target.value })
-                    }
-                  />
-                ) : (
-                  <input
-                    type={field.type}
-                    required={field.required}
-                    value={form[field.key]}
-                    onChange={(event) =>
-                      setForm({ ...form, [field.key]: event.target.value })
-                    }
-                  />
-                )}
-              </label>
-            ))}
-          </div>
+          <h2 className="section-title">Core Metrics</h2>
+          {renderFields(primaryFields)}
+
+          <h2 className="section-title">Audience + Performance</h2>
+          {renderFields(audienceFields)}
+
+          <h2 className="section-title">Views Over Time</h2>
+          {renderFields(overTimeFields, "grid grid-wide")}
+
+          <details className="expander">
+            <summary>Second-by-second Retention (sec_0 to sec_90)</summary>
+            {renderFields(secFields, "grid grid-tight")}
+          </details>
 
           <div className="actions">
             <button disabled={loading} type="submit">
