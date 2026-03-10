@@ -119,6 +119,7 @@ export default function Home() {
   const [form, setForm] = useState<FormState>(createInitialForm);
   const [rows, setRows] = useState<Metric[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Loading...");
   const [igStatus, setIgStatus] = useState<InstagramStatus | null>(null);
@@ -130,6 +131,10 @@ export default function Home() {
     [rows]
   );
   const latestRow = rows[0];
+  const selectedInsightRow = useMemo(
+    () => rows.find((row) => row.id === selectedInsightId) ?? null,
+    [rows, selectedInsightId]
+  );
 
   const loadRows = async () => {
     const res = await fetch("/api/metrics");
@@ -182,6 +187,14 @@ export default function Home() {
       window.history.replaceState({}, "", cleanUrl);
     }
   }, []);
+
+  useEffect(() => {
+    if (!selectedInsightId) return;
+    const stillExists = rows.some((row) => row.id === selectedInsightId);
+    if (!stillExists) {
+      setSelectedInsightId(null);
+    }
+  }, [rows, selectedInsightId]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -240,6 +253,14 @@ export default function Home() {
     setEditingId(row.id);
     setMessage(`Editing "${row.title}"`);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const viewInsightsForRow = (row: Metric) => {
+    setSelectedInsightId(row.id);
+    document.getElementById("calculated-metrics")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
   };
 
   const cancelEditing = () => {
@@ -520,7 +541,7 @@ export default function Home() {
     return `https://${value}`;
   };
 
-  const metricSource: MetricSource = latestRow ?? form;
+  const metricSource: MetricSource = selectedInsightRow ?? latestRow ?? form;
 
   const derivedMetrics = metricSource
     ? (() => {
@@ -674,7 +695,10 @@ export default function Home() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={selectedInsightId === row.id ? "selected-row" : undefined}
+                >
                   <td>{row.date}</td>
                   <td>{row.title}</td>
                   <td className="url-cell">
@@ -698,13 +722,22 @@ export default function Home() {
                   <td>{row.shares?.toLocaleString() ?? "-"}</td>
                   <td>{row.follows?.toLocaleString() ?? "-"}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="secondary-btn table-btn"
-                      onClick={() => startEditingRow(row)}
-                    >
-                      {editingId === row.id ? "Editing" : "Edit"}
-                    </button>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="secondary-btn table-btn"
+                        onClick={() => viewInsightsForRow(row)}
+                      >
+                        {selectedInsightId === row.id ? "Viewing" : "View Insights"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn table-btn subtle-btn"
+                        onClick={() => startEditingRow(row)}
+                      >
+                        {editingId === row.id ? "Editing" : "Edit"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -713,13 +746,39 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="card">
-        <h2 style={{ marginTop: 0 }}>Calculated Metrics</h2>
+      <section id="calculated-metrics" className="card">
+        <div className="card-head">
+          <h2 style={{ marginTop: 0 }}>Calculated Metrics</h2>
+          {selectedInsightRow ? (
+            <button
+              type="button"
+              className="secondary-btn subtle-btn table-btn"
+              onClick={() => setSelectedInsightId(null)}
+            >
+              Show Latest Reel
+            </button>
+          ) : null}
+        </div>
         <p className="subtitle">
-          {latestRow
+          {selectedInsightRow
+            ? `${selectedInsightRow.title} · ${selectedInsightRow.date} (selected reel insights)`
+            : latestRow
             ? `${latestRow.title} · ${latestRow.date} (latest saved entry)`
             : "Live preview from current form values"}
         </p>
+        {selectedInsightRow?.url ? (
+          <p className="subtitle">
+            Reel URL:{" "}
+            <a
+              className="url-link"
+              href={toExternalUrl(selectedInsightRow.url)}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              {selectedInsightRow.url}
+            </a>
+          </p>
+        ) : null}
           <div className="grid metric-grid">
             {derivedMetrics.map((metric) => (
               <div key={metric.label} className="metric-tile">
