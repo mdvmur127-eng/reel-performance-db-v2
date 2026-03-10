@@ -430,12 +430,8 @@ export default function Home() {
   };
 
   const switchInstagramAccount = async () => {
-    setIgMessage("Loading connected Instagram accounts...");
-    const opened = await loadSwitchAccounts();
-    if (!opened) {
-      setIgMessage("Could not load switchable accounts. Reconnecting...");
-      window.location.href = "/api/meta/disconnect";
-    }
+    setIgMessage("Opening account chooser...");
+    window.location.href = "/api/meta/auth/start?force=1";
   };
 
   const closeAccountPicker = async () => {

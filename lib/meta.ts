@@ -122,7 +122,10 @@ const graphGet = async <T>(path: string, params: Record<string, string>) => {
   return (await response.json()) as T;
 };
 
-export const buildInstagramAuthUrl = (state: string) => {
+export const buildInstagramAuthUrl = (
+  state: string,
+  options?: { forceRerequest?: boolean }
+) => {
   const { appId, redirectUri } = getMetaConfig();
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
   url.searchParams.set("client_id", appId);
@@ -130,6 +133,9 @@ export const buildInstagramAuthUrl = (state: string) => {
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", META_SCOPES.join(","));
+  if (options?.forceRerequest) {
+    url.searchParams.set("auth_type", "rerequest");
+  }
   return url.toString();
 };
 
