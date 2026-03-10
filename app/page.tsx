@@ -40,6 +40,8 @@ type PendingInstagramAccount = {
   pageName: string | null;
 };
 
+type AccountPickerMode = "oauth" | "switch";
+
 type FieldConfig = {
   key: string;
   label: string;
@@ -135,6 +137,8 @@ export default function Home() {
   const [pendingAccounts, setPendingAccounts] = useState<PendingInstagramAccount[]>([]);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [pickingAccountId, setPickingAccountId] = useState<string | null>(null);
+  const [accountPickerMode, setAccountPickerMode] = useState<AccountPickerMode>("oauth");
+  const [connectedIgUserId, setConnectedIgUserId] = useState<string | null>(null);
 
   const totalViews = useMemo(
     () => rows.reduce((sum, row) => sum + (row.views ?? 0), 0),
@@ -169,6 +173,7 @@ export default function Home() {
     }
 
     setIgStatus(json);
+    setConnectedIgUserId(json.account?.ig_user_id ?? null);
   };
 
   const loadPendingAccounts = async () => {
@@ -185,6 +190,8 @@ export default function Home() {
     }
 
     if (json.pending && (json.accounts?.length ?? 0) > 0) {
+      setAccountPickerMode("oauth");
+      setConnectedIgUserId(null);
       setPendingAccounts(json.accounts);
       setShowAccountPicker(true);
       setIgMessage("Select the Instagram account you want to connect");
@@ -193,6 +200,27 @@ export default function Home() {
 
     setPendingAccounts([]);
     setShowAccountPicker(false);
+  };
+
+  const loadSwitchAccounts = async () => {
+    const res = await fetch("/api/meta/switch/accounts");
+    const json = (await res.json()) as {
+      connectedIgUserId?: string;
+      accounts: PendingInstagramAccount[];
+      error?: string;
+    };
+
+    if (!res.ok) {
+      setIgMessage(json.error ?? "Failed to load switchable Instagram accounts");
+      return false;
+    }
+
+    setAccountPickerMode("switch");
+    setConnectedIgUserId(json.connectedIgUserId ?? null);
+    setPendingAccounts(json.accounts ?? []);
+    setShowAccountPicker(true);
+    setIgMessage("Choose which connected Instagram account to use");
+    return true;
   };
 
   useEffect(() => {
@@ -402,30 +430,34 @@ export default function Home() {
   };
 
   const switchInstagramAccount = async () => {
-    setIgMessage("Switching account...");
-
-    const res = await fetch("/api/meta/disconnect", {
-      method: "POST"
-    });
-    const json = (await res.json()) as { error?: string };
-
-    if (!res.ok) {
-      setIgMessage(json.error ?? "Failed to disconnect current Instagram account");
-      return;
+    setIgMessage("Loading connected Instagram accounts...");
+    const opened = await loadSwitchAccounts();
+    if (!opened) {
+      setIgMessage("Could not load switchable accounts. Reconnecting...");
+      window.location.href = "/api/meta/disconnect";
     }
-
-    window.location.href = "/api/meta/auth/start";
   };
 
   const closeAccountPicker = async () => {
     setShowAccountPicker(false);
     setPendingAccounts([]);
+    if (accountPickerMode === "oauth") {
+      await fetch("/api/meta/pending", { method: "DELETE" }).catch(() => undefined);
+    }
+  };
+
+  const searchAnotherInstagramAccount = async () => {
+    setShowAccountPicker(false);
+    setPendingAccounts([]);
     await fetch("/api/meta/pending", { method: "DELETE" }).catch(() => undefined);
+    window.location.href = "/api/meta/disconnect";
   };
 
   const selectInstagramAccount = async (igUserId: string) => {
     setPickingAccountId(igUserId);
-    const res = await fetch("/api/meta/select", {
+    const endpoint =
+      accountPickerMode === "switch" ? "/api/meta/switch/select" : "/api/meta/select";
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ igUserId })
@@ -440,8 +472,12 @@ export default function Home() {
 
     setShowAccountPicker(false);
     setPendingAccounts([]);
-    setIgMessage("Instagram account connected");
-    await loadInstagramStatus();
+    setIgMessage(
+      accountPickerMode === "switch"
+        ? "Instagram account switched"
+        : "Instagram account connected"
+    );
+    await Promise.all([loadInstagramStatus(), loadRows()]);
   };
 
   const parseMaybeNumber = (value: string) => {
@@ -706,7 +742,11 @@ export default function Home() {
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="account-picker-modal">
             <div className="account-picker-head">
-              <h3>Choose Instagram account</h3>
+              <h3>
+                {accountPickerMode === "switch"
+                  ? "Switch Instagram account"
+                  : "Choose Instagram account"}
+              </h3>
               <button
                 className="secondary-btn table-btn subtle-btn"
                 type="button"
@@ -716,13 +756,18 @@ export default function Home() {
               </button>
             </div>
             <p className="subtitle">
-              Select which Instagram profile you want to connect to this app.
+              {accountPickerMode === "switch"
+                ? "Select which connected Instagram profile you want to use."
+                : "Select which Instagram profile you want to connect to this app."}
             </p>
             <div className="account-picker-list">
               {pendingAccounts.map((account) => (
                 <div key={account.igUserId} className="account-picker-item">
                   <div className="account-picker-info">
-                    <strong>@{account.username ?? account.igUserId}</strong>
+                    <strong>
+                      @{account.username ?? account.igUserId}
+                      {account.igUserId === connectedIgUserId ? " (Current)" : ""}
+                    </strong>
                     <span>
                       Facebook Page: {account.pageName ?? (account.pageId || "Unknown")}
                     </span>
@@ -739,10 +784,24 @@ export default function Home() {
               ))}
             </div>
             <div className="account-picker-actions">
+              {accountPickerMode === "switch" ? (
+                <button
+                  className="secondary-btn subtle-btn table-btn"
+                  type="button"
+                  onClick={searchAnotherInstagramAccount}
+                  disabled={pickingAccountId !== null}
+                >
+                  Search another account
+                </button>
+              ) : null}
               <button
                 className="secondary-btn subtle-btn table-btn"
                 type="button"
-                onClick={() => loadPendingAccounts()}
+                onClick={() =>
+                  accountPickerMode === "switch"
+                    ? loadSwitchAccounts()
+                    : loadPendingAccounts()
+                }
                 disabled={pickingAccountId !== null}
               >
                 Refresh list
