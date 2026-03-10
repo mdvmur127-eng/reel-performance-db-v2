@@ -22,6 +22,7 @@ type Metric = {
 };
 
 type FormState = Record<string, string>;
+type MetricSource = Record<string, string | number | null | undefined>;
 
 type FieldConfig = {
   key: string;
@@ -173,22 +174,22 @@ export default function Home() {
     return top / bottom;
   };
 
-  const secValue = (row: Metric, second: number) =>
-    asNumber(row[`sec_${second}` as keyof Metric]);
+  const secValue = (source: MetricSource, second: number) =>
+    asNumber(source[`sec_${second}`]);
 
-  const completionRate = (row: Metric) => {
-    const sec0 = secValue(row, 0);
+  const completionRate = (source: MetricSource) => {
+    const sec0 = secValue(source, 0);
     if (sec0 === null || sec0 <= 0) return null;
 
-    const duration = asNumber(row.duration);
+    const duration = asNumber(source.duration);
     if (duration !== null) {
       const target = Math.max(0, Math.min(90, Math.round(duration)));
-      const direct = secValue(row, target);
+      const direct = secValue(source, target);
       if (direct !== null) return direct / sec0;
     }
 
     for (let i = 90; i >= 0; i -= 1) {
-      const value = secValue(row, i);
+      const value = secValue(source, i);
       if (value !== null) return value / sec0;
     }
 
@@ -201,17 +202,19 @@ export default function Home() {
   const formatNumber = (value: number | null) =>
     value === null ? "-" : value.toFixed(3);
 
-  const derivedMetrics = latestRow
+  const metricSource: MetricSource = latestRow ?? form;
+
+  const derivedMetrics = metricSource
     ? (() => {
-        const sec0 = secValue(latestRow, 0);
-        const sec3 = secValue(latestRow, 3);
+        const sec0 = secValue(metricSource, 0);
+        const sec3 = secValue(metricSource, 3);
         const hookRetention =
           sec0 !== null && sec0 > 0 && sec3 !== null ? sec3 / sec0 : null;
         const engagementTop =
-          (latestRow.likes ?? 0) +
-          (latestRow.comments ?? 0) +
-          (latestRow.saves ?? 0) +
-          (latestRow.shares ?? 0);
+          (asNumber(metricSource.likes) ?? 0) +
+          (asNumber(metricSource.comments) ?? 0) +
+          (asNumber(metricSource.saves) ?? 0) +
+          (asNumber(metricSource.shares) ?? 0);
 
         return [
           { label: "Hook Retention", value: formatPercent(hookRetention) },
@@ -221,26 +224,26 @@ export default function Home() {
           },
           {
             label: "Average Retention",
-            value: formatPercent(ratio(latestRow.average_watch_time, latestRow.duration))
+            value: formatPercent(ratio(metricSource.average_watch_time, metricSource.duration))
           },
-          { label: "Completion Rate", value: formatPercent(completionRate(latestRow)) },
+          { label: "Completion Rate", value: formatPercent(completionRate(metricSource)) },
           {
             label: "Non-Follower Ratio",
-            value: formatPercent(ratio(latestRow.views_non_followers, latestRow.views))
+            value: formatPercent(ratio(metricSource.views_non_followers, metricSource.views))
           },
           {
             label: "Views per Reach",
-            value: formatNumber(ratio(latestRow.views, latestRow.accounts_reached))
+            value: formatNumber(ratio(metricSource.views, metricSource.accounts_reached))
           },
           {
             label: "Engagement Rate",
-            value: formatPercent(ratio(engagementTop, latestRow.views))
+            value: formatPercent(ratio(engagementTop, metricSource.views))
           },
-          { label: "Save Rate", value: formatPercent(ratio(latestRow.saves, latestRow.views)) },
-          { label: "Share Rate", value: formatPercent(ratio(latestRow.shares, latestRow.views)) },
+          { label: "Save Rate", value: formatPercent(ratio(metricSource.saves, metricSource.views)) },
+          { label: "Share Rate", value: formatPercent(ratio(metricSource.shares, metricSource.views)) },
           {
             label: "Follow Rate",
-            value: formatPercent(ratio(latestRow.follows, latestRow.views))
+            value: formatPercent(ratio(metricSource.follows, metricSource.views))
           }
         ];
       })()
@@ -313,12 +316,13 @@ export default function Home() {
         </div>
       </section>
 
-      {latestRow && (
-        <section className="card">
-          <h2 style={{ marginTop: 0 }}>Calculated Metrics (Latest Entry)</h2>
-          <p className="subtitle">
-            {latestRow.title} · {latestRow.date}
-          </p>
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Calculated Metrics</h2>
+        <p className="subtitle">
+          {latestRow
+            ? `${latestRow.title} · ${latestRow.date} (latest saved entry)`
+            : "Live preview from current form values"}
+        </p>
           <div className="grid metric-grid">
             {derivedMetrics.map((metric) => (
               <div key={metric.label} className="metric-tile">
@@ -327,8 +331,7 @@ export default function Home() {
               </div>
             ))}
           </div>
-        </section>
-      )}
+      </section>
     </main>
   );
 }
