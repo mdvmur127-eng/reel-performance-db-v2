@@ -162,6 +162,81 @@ export default function Home() {
     setMessage("Saved metric entry");
   };
 
+  const parseMaybeNumber = (value: string) => {
+    if (value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatNumberString = (value: number) => {
+    if (Number.isInteger(value)) return String(value);
+    return String(Number(value.toFixed(4)));
+  };
+
+  const handleFieldChange = (fieldKey: string, value: string) => {
+    setForm((current) => {
+      const next = { ...current, [fieldKey]: value };
+      const numericValue = parseMaybeNumber(value);
+
+      // Keep gender split consistent at 100%.
+      if (fieldKey === "audience_men") {
+        if (numericValue !== null) {
+          const men = Math.max(0, Math.min(100, numericValue));
+          next.audience_men = formatNumberString(men);
+          next.audience_women = formatNumberString(100 - men);
+        } else {
+          next.audience_women = "";
+        }
+      }
+
+      if (fieldKey === "audience_women") {
+        if (numericValue !== null) {
+          const women = Math.max(0, Math.min(100, numericValue));
+          next.audience_women = formatNumberString(women);
+          next.audience_men = formatNumberString(100 - women);
+        } else {
+          next.audience_men = "";
+        }
+      }
+
+      // Keep follower/non-follower views consistent with total views.
+      const totalViews = parseMaybeNumber(next.views);
+
+      if (fieldKey === "views_followers" && totalViews !== null && numericValue !== null) {
+        const followers = Math.max(0, Math.min(totalViews, numericValue));
+        next.views_followers = formatNumberString(followers);
+        next.views_non_followers = formatNumberString(totalViews - followers);
+      }
+
+      if (
+        fieldKey === "views_non_followers" &&
+        totalViews !== null &&
+        numericValue !== null
+      ) {
+        const nonFollowers = Math.max(0, Math.min(totalViews, numericValue));
+        next.views_non_followers = formatNumberString(nonFollowers);
+        next.views_followers = formatNumberString(totalViews - nonFollowers);
+      }
+
+      if (fieldKey === "views" && totalViews !== null) {
+        const followers = parseMaybeNumber(next.views_followers);
+        const nonFollowers = parseMaybeNumber(next.views_non_followers);
+
+        if (followers !== null) {
+          const safeFollowers = Math.max(0, Math.min(totalViews, followers));
+          next.views_followers = formatNumberString(safeFollowers);
+          next.views_non_followers = formatNumberString(totalViews - safeFollowers);
+        } else if (nonFollowers !== null) {
+          const safeNonFollowers = Math.max(0, Math.min(totalViews, nonFollowers));
+          next.views_non_followers = formatNumberString(safeNonFollowers);
+          next.views_followers = formatNumberString(totalViews - safeNonFollowers);
+        }
+      }
+
+      return next;
+    });
+  };
+
   const renderFields = (group: FieldConfig[], gridClassName = "grid") => (
     <div className={gridClassName}>
       {group.map((field) => (
@@ -172,13 +247,13 @@ export default function Home() {
             <textarea
               required={field.required}
               value={form[field.key]}
-              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+              onChange={(event) => handleFieldChange(field.key, event.target.value)}
             />
           ) : field.type === "select" ? (
             <select
               required={field.required}
               value={form[field.key]}
-              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+              onChange={(event) => handleFieldChange(field.key, event.target.value)}
             >
               <option value="">Select...</option>
               {(field.options ?? []).map((option) => (
@@ -192,7 +267,7 @@ export default function Home() {
               type={field.type}
               required={field.required}
               value={form[field.key]}
-              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+              onChange={(event) => handleFieldChange(field.key, event.target.value)}
             />
           )}
         </label>
