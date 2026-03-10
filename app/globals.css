@@ -152,6 +152,23 @@ button:disabled {
   font-size: 14px;
 }
 
+.metric-grid {
+  margin-top: 12px;
+}
+
+.metric-tile {
+  border: 1px solid var(--line);
+  background: #fbfcfc;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.metric-value {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

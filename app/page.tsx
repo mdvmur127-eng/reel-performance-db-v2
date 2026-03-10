@@ -8,12 +8,17 @@ type Metric = {
   title: string;
   url: string | null;
   views: number | null;
+  views_non_followers: number | null;
   likes: number | null;
   comments: number | null;
   saves: number | null;
   shares: number | null;
   follows: number | null;
+  average_watch_time: number | null;
+  duration: number | null;
+  accounts_reached: number | null;
   created_at: string;
+  [key: string]: string | number | null | undefined;
 };
 
 type FormState = Record<string, string>;
@@ -81,6 +86,7 @@ export default function Home() {
     () => rows.reduce((sum, row) => sum + (row.views ?? 0), 0),
     [rows]
   );
+  const latestRow = rows[0];
 
   const loadRows = async () => {
     const res = await fetch("/api/metrics");
@@ -151,6 +157,95 @@ export default function Home() {
     </div>
   );
 
+  const asNumber = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const ratio = (
+    numerator: string | number | null | undefined,
+    denominator: string | number | null | undefined
+  ) => {
+    const top = asNumber(numerator);
+    const bottom = asNumber(denominator);
+    if (top === null || bottom === null || bottom <= 0) return null;
+    return top / bottom;
+  };
+
+  const secValue = (row: Metric, second: number) =>
+    asNumber(row[`sec_${second}` as keyof Metric]);
+
+  const completionRate = (row: Metric) => {
+    const sec0 = secValue(row, 0);
+    if (sec0 === null || sec0 <= 0) return null;
+
+    const duration = asNumber(row.duration);
+    if (duration !== null) {
+      const target = Math.max(0, Math.min(90, Math.round(duration)));
+      const direct = secValue(row, target);
+      if (direct !== null) return direct / sec0;
+    }
+
+    for (let i = 90; i >= 0; i -= 1) {
+      const value = secValue(row, i);
+      if (value !== null) return value / sec0;
+    }
+
+    return null;
+  };
+
+  const formatPercent = (value: number | null) =>
+    value === null ? "-" : `${(value * 100).toFixed(2)}%`;
+
+  const formatNumber = (value: number | null) =>
+    value === null ? "-" : value.toFixed(3);
+
+  const derivedMetrics = latestRow
+    ? (() => {
+        const sec0 = secValue(latestRow, 0);
+        const sec3 = secValue(latestRow, 3);
+        const hookRetention =
+          sec0 !== null && sec0 > 0 && sec3 !== null ? sec3 / sec0 : null;
+        const engagementTop =
+          (latestRow.likes ?? 0) +
+          (latestRow.comments ?? 0) +
+          (latestRow.saves ?? 0) +
+          (latestRow.shares ?? 0);
+
+        return [
+          { label: "Hook Retention", value: formatPercent(hookRetention) },
+          {
+            label: "Early Drop",
+            value: formatPercent(hookRetention === null ? null : 1 - hookRetention)
+          },
+          {
+            label: "Average Retention",
+            value: formatPercent(ratio(latestRow.average_watch_time, latestRow.duration))
+          },
+          { label: "Completion Rate", value: formatPercent(completionRate(latestRow)) },
+          {
+            label: "Non-Follower Ratio",
+            value: formatPercent(ratio(latestRow.views_non_followers, latestRow.views))
+          },
+          {
+            label: "Views per Reach",
+            value: formatNumber(ratio(latestRow.views, latestRow.accounts_reached))
+          },
+          {
+            label: "Engagement Rate",
+            value: formatPercent(ratio(engagementTop, latestRow.views))
+          },
+          { label: "Save Rate", value: formatPercent(ratio(latestRow.saves, latestRow.views)) },
+          { label: "Share Rate", value: formatPercent(ratio(latestRow.shares, latestRow.views)) },
+          {
+            label: "Follow Rate",
+            value: formatPercent(ratio(latestRow.follows, latestRow.views))
+          }
+        ];
+      })()
+    : [];
+
   return (
     <main>
       <header className="page-header">
@@ -217,6 +312,23 @@ export default function Home() {
           </table>
         </div>
       </section>
+
+      {latestRow && (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Calculated Metrics (Latest Entry)</h2>
+          <p className="subtitle">
+            {latestRow.title} · {latestRow.date}
+          </p>
+          <div className="grid metric-grid">
+            {derivedMetrics.map((metric) => (
+              <div key={metric.label} className="metric-tile">
+                <strong>{metric.label}</strong>
+                <div className="metric-value">{metric.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
