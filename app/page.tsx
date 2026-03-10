@@ -23,6 +23,15 @@ type Metric = {
 
 type FormState = Record<string, string>;
 type MetricSource = Record<string, string | number | null | undefined>;
+type InstagramStatus = {
+  connected: boolean;
+  account: {
+    ig_user_id: string;
+    ig_username: string | null;
+    token_expires_at: string | null;
+    updated_at: string;
+  } | null;
+};
 
 type FieldConfig = {
   key: string;
@@ -111,6 +120,9 @@ export default function Home() {
   const [rows, setRows] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Loading...");
+  const [igStatus, setIgStatus] = useState<InstagramStatus | null>(null);
+  const [igSyncing, setIgSyncing] = useState(false);
+  const [igMessage, setIgMessage] = useState("");
 
   const totalViews = useMemo(
     () => rows.reduce((sum, row) => sum + (row.views ?? 0), 0),
@@ -131,8 +143,43 @@ export default function Home() {
     setMessage(`Loaded ${json.data?.length ?? 0} records`);
   };
 
+  const loadInstagramStatus = async () => {
+    const res = await fetch("/api/meta/status");
+    const json = (await res.json()) as InstagramStatus & { error?: string };
+
+    if (!res.ok) {
+      setIgMessage(json.error ?? "Failed to load Instagram connection status");
+      return;
+    }
+
+    setIgStatus(json);
+  };
+
   useEffect(() => {
     loadRows().catch(() => setMessage("Failed to load metrics"));
+    loadInstagramStatus().catch(() =>
+      setIgMessage("Failed to load Instagram connection status")
+    );
+
+    const query = new URLSearchParams(window.location.search);
+    const igState = query.get("ig");
+    const igStateMessage = query.get("ig_message");
+
+    if (igState === "connected") {
+      setIgMessage("Instagram connected successfully");
+    }
+
+    if (igState === "error") {
+      setIgMessage(igStateMessage ?? "Instagram connection failed");
+    }
+
+    if (igState || igStateMessage) {
+      query.delete("ig");
+      query.delete("ig_message");
+      const nextQuery = query.toString();
+      const cleanUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+      window.history.replaceState({}, "", cleanUrl);
+    }
   }, []);
 
   const onSubmit = async (event: FormEvent) => {
@@ -160,6 +207,25 @@ export default function Home() {
     setRows((current) => [json.data, ...current]);
     setLoading(false);
     setMessage("Saved metric entry");
+  };
+
+  const syncInstagramReels = async () => {
+    setIgSyncing(true);
+    setIgMessage("Syncing reels from Instagram...");
+
+    const res = await fetch("/api/meta/sync", { method: "POST" });
+    const json = (await res.json()) as { imported?: number; message?: string; error?: string };
+
+    if (!res.ok) {
+      setIgSyncing(false);
+      setIgMessage(json.error ?? "Failed to sync reels");
+      return;
+    }
+
+    const imported = json.imported ?? 0;
+    setIgMessage(`Synced ${imported} reels from Instagram`);
+    await Promise.all([loadRows(), loadInstagramStatus()]);
+    setIgSyncing(false);
   };
 
   const parseMaybeNumber = (value: string) => {
@@ -369,9 +435,33 @@ export default function Home() {
   return (
     <main>
       <header className="page-header">
-        <h1>Reels Metrics Database</h1>
-        <p className="subtitle">Structured form for clean manual reel snapshots.</p>
+        <div>
+          <h1>Reels Metrics Database</h1>
+          <p className="subtitle">Structured form for clean manual reel snapshots.</p>
+        </div>
+        <div className="header-actions">
+          {igStatus?.connected ? (
+            <>
+              <span className="ig-pill">
+                IG Connected: @{igStatus.account?.ig_username ?? igStatus.account?.ig_user_id}
+              </span>
+              <button
+                className="secondary-btn"
+                type="button"
+                onClick={syncInstagramReels}
+                disabled={igSyncing}
+              >
+                {igSyncing ? "Syncing IG..." : "Sync IG Reels"}
+              </button>
+            </>
+          ) : (
+            <a className="secondary-btn" href="/api/meta/auth/start">
+              Connect IG
+            </a>
+          )}
+        </div>
       </header>
+      {igMessage ? <p className="subtitle ig-message">{igMessage}</p> : null}
 
       <section className="card">
         <form onSubmit={onSubmit}>

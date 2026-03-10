@@ -146,3 +146,23 @@ for each row
 execute function public.set_updated_at();
 
 alter table public.reel_metrics enable row level security;
+
+create table if not exists public.meta_instagram_connections (
+  id integer primary key default 1 check (id = 1),
+  ig_user_id text not null,
+  ig_username text,
+  access_token text not null,
+  token_expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists meta_instagram_connections_set_updated_at
+  on public.meta_instagram_connections;
+
+create trigger meta_instagram_connections_set_updated_at
+before update on public.meta_instagram_connections
+for each row
+execute function public.set_updated_at();
+
+alter table public.meta_instagram_connections enable row level security;

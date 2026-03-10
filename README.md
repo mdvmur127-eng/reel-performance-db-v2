@@ -17,8 +17,21 @@ The schema now uses the field set:
 2. Add values:
    - `NEXT_PUBLIC_SUPABASE_URL`: from Supabase project settings.
    - `SUPABASE_SERVICE_ROLE_KEY`: from Supabase project API keys.
+   - `META_APP_ID`: from your Meta app.
+   - `META_APP_SECRET`: from your Meta app.
+   - `META_REDIRECT_URI`: callback URL, e.g. `https://your-domain.com/api/meta/auth/callback`.
 
-## 3) Run locally
+## 3) Meta app setup (for Connect IG)
+
+1. In [Meta for Developers](https://developers.facebook.com/), create/select your app.
+2. Add Facebook Login product.
+3. Add the permissions used by this app: `instagram_basic`, `instagram_manage_insights`, `pages_show_list`, `pages_read_engagement`.
+4. Add your callback URL to Facebook Login valid OAuth redirect URIs:
+   - Local example: `http://localhost:3000/api/meta/auth/callback`
+   - Prod example: `https://your-domain.com/api/meta/auth/callback`
+5. Ensure your Instagram account is a Professional account connected to a Facebook Page.
+
+## 4) Run locally
 
 ```bash
 npm install
@@ -27,7 +40,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
-## 4) Deploy to Vercel
+## 5) Deploy to Vercel
 
 1. Push this folder to GitHub.
 2. In Vercel, import the repo.
