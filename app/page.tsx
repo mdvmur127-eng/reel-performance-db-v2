@@ -213,8 +213,30 @@ export default function Home() {
     setIgSyncing(true);
     setIgMessage("Syncing reels from Instagram...");
 
-    const res = await fetch("/api/meta/sync", { method: "POST" });
-    const json = (await res.json()) as { imported?: number; message?: string; error?: string };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90_000);
+
+    let res: Response;
+
+    try {
+      res = await fetch("/api/meta/sync", {
+        method: "POST",
+        signal: controller.signal
+      });
+    } catch {
+      clearTimeout(timeout);
+      setIgSyncing(false);
+      setIgMessage("Sync timed out. Try again (or reconnect IG).");
+      return;
+    }
+
+    clearTimeout(timeout);
+    const json = (await res.json()) as {
+      imported?: number;
+      scanned?: number;
+      message?: string;
+      error?: string;
+    };
 
     if (!res.ok) {
       setIgSyncing(false);
@@ -223,9 +245,30 @@ export default function Home() {
     }
 
     const imported = json.imported ?? 0;
-    setIgMessage(`Synced ${imported} reels from Instagram`);
+    const scanned = json.scanned ?? imported;
+    setIgMessage(
+      imported > 0
+        ? `Synced ${imported} reels (scanned ${scanned})`
+        : json.message ?? `No reels imported (scanned ${scanned})`
+    );
     await Promise.all([loadRows(), loadInstagramStatus()]);
     setIgSyncing(false);
+  };
+
+  const switchInstagramAccount = async () => {
+    setIgMessage("Switching account...");
+
+    const res = await fetch("/api/meta/disconnect", {
+      method: "POST"
+    });
+    const json = (await res.json()) as { error?: string };
+
+    if (!res.ok) {
+      setIgMessage(json.error ?? "Failed to disconnect current Instagram account");
+      return;
+    }
+
+    window.location.href = "/api/meta/auth/start";
   };
 
   const parseMaybeNumber = (value: string) => {
@@ -452,6 +495,14 @@ export default function Home() {
                 disabled={igSyncing}
               >
                 {igSyncing ? "Syncing IG..." : "Sync IG Reels"}
+              </button>
+              <button
+                className="secondary-btn"
+                type="button"
+                onClick={switchInstagramAccount}
+                disabled={igSyncing}
+              >
+                Switch IG Account
               </button>
             </>
           ) : (

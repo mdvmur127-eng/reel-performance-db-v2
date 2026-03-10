@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 
 const GRAPH_VERSION = "v21.0";
 const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+const GRAPH_TIMEOUT_MS = 15_000;
 
 const META_SCOPES = [
   "instagram_basic",
@@ -72,6 +73,20 @@ const parseGraphError = async (response: Response) => {
   return message;
 };
 
+const fetchWithTimeout = async (url: string, init: RequestInit = {}) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const graphGet = async <T>(path: string, params: Record<string, string>) => {
   const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}${path}`);
 
@@ -79,7 +94,10 @@ const graphGet = async <T>(path: string, params: Record<string, string>) => {
     url.searchParams.set(key, value);
   }
 
-  const response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  const response = await fetchWithTimeout(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
 
   if (!response.ok) {
     throw new Error(await parseGraphError(response));
@@ -212,7 +230,8 @@ export const getInstagramAccount = async (
 
 export const fetchInstagramReels = async (
   accessToken: string,
-  igUserId: string
+  igUserId: string,
+  maxItems = 25
 ): Promise<InstagramMedia[]> => {
   const reels: InstagramMedia[] = [];
 
@@ -222,10 +241,13 @@ export const fetchInstagramReels = async (
     "fields",
     "id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count"
   );
-  nextUrl.searchParams.set("limit", "100");
+  nextUrl.searchParams.set("limit", String(Math.min(50, Math.max(10, maxItems))));
 
-  for (let safety = 0; safety < 20; safety += 1) {
-    const response = await fetch(nextUrl.toString(), { method: "GET", cache: "no-store" });
+  for (let safety = 0; safety < 10 && reels.length < maxItems; safety += 1) {
+    const response = await fetchWithTimeout(nextUrl.toString(), {
+      method: "GET",
+      cache: "no-store"
+    });
 
     if (!response.ok) {
       throw new Error(await parseGraphError(response));
@@ -237,11 +259,16 @@ export const fetchInstagramReels = async (
     };
 
     const mediaItems = json.data ?? [];
-    reels.push(
-      ...mediaItems.filter(
-        (item) => item.media_product_type === "REELS" || item.media_type === "VIDEO"
-      )
+    const filtered = mediaItems.filter(
+      (item) => item.media_product_type === "REELS" || item.media_type === "VIDEO"
     );
+
+    for (const item of filtered) {
+      reels.push(item);
+      if (reels.length >= maxItems) {
+        break;
+      }
+    }
 
     if (!json.paging?.next) {
       break;

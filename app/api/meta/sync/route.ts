@@ -37,34 +37,51 @@ export async function POST() {
   }
 
   const typedConnection = connection as MetaConnection;
+  const syncLimit = Math.max(5, Math.min(50, Number(process.env.META_SYNC_LIMIT ?? 25)));
+  const insightConcurrency = Math.max(
+    1,
+    Math.min(8, Number(process.env.META_INSIGHT_CONCURRENCY ?? 5))
+  );
 
   try {
     const reels = await fetchInstagramReels(
       typedConnection.access_token,
-      typedConnection.ig_user_id
+      typedConnection.ig_user_id,
+      syncLimit
     );
 
     if (reels.length === 0) {
-      return NextResponse.json({ imported: 0, message: "No reels found" });
+      return NextResponse.json({
+        imported: 0,
+        scanned: 0,
+        message: "No reels found on this connected Instagram account"
+      });
     }
 
     const rows = [] as Array<Record<string, string | number | null>>;
 
-    for (const reel of reels) {
-      const insights = await fetchReelInsights(typedConnection.access_token, reel.id);
+    for (let i = 0; i < reels.length; i += insightConcurrency) {
+      const batch = reels.slice(i, i + insightConcurrency);
+      const batchRows = await Promise.all(
+        batch.map(async (reel) => {
+          const insights = await fetchReelInsights(typedConnection.access_token, reel.id);
 
-      rows.push({
-        date: toDate(reel.timestamp),
-        title: toTitle(reel.caption, reel.id),
-        url: reel.permalink ?? null,
-        views: insights.plays,
-        likes: reel.like_count ?? null,
-        comments: reel.comments_count ?? null,
-        saves: insights.saved,
-        shares: insights.shares,
-        accounts_reached: insights.reach,
-        top_source_of_views: "Reels tab"
-      });
+          return {
+            date: toDate(reel.timestamp),
+            title: toTitle(reel.caption, reel.id),
+            url: reel.permalink ?? null,
+            views: insights.plays,
+            likes: reel.like_count ?? null,
+            comments: reel.comments_count ?? null,
+            saves: insights.saved,
+            shares: insights.shares,
+            accounts_reached: insights.reach,
+            top_source_of_views: "Reels tab"
+          };
+        })
+      );
+
+      rows.push(...batchRows);
     }
 
     const { error: upsertError } = await supabaseAdmin
@@ -75,7 +92,11 @@ export async function POST() {
       return NextResponse.json({ error: upsertError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ imported: rows.length });
+    return NextResponse.json({
+      imported: rows.length,
+      scanned: reels.length,
+      message: `Synced ${rows.length} reels`
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to sync reels";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -20,6 +20,8 @@ The schema now uses the field set:
    - `META_APP_ID`: from your Meta app.
    - `META_APP_SECRET`: from your Meta app.
    - `META_REDIRECT_URI`: callback URL, e.g. `https://your-domain.com/api/meta/auth/callback`.
+   - `META_SYNC_LIMIT`: optional reels import limit per sync (default `25`).
+   - `META_INSIGHT_CONCURRENCY`: optional parallel insight requests (default `5`).
 
 ## 3) Meta app setup (for Connect IG)
 
@@ -30,6 +32,7 @@ The schema now uses the field set:
    - Local example: `http://localhost:3000/api/meta/auth/callback`
    - Prod example: `https://your-domain.com/api/meta/auth/callback`
 5. Ensure your Instagram account is a Professional account connected to a Facebook Page.
+6. To check a different Instagram account, use **Switch IG Account** in the app, then authenticate the other account.
 
 ## 4) Run locally
 
