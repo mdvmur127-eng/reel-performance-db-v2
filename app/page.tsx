@@ -27,7 +27,8 @@ type MetricSource = Record<string, string | number | null | undefined>;
 type FieldConfig = {
   key: string;
   label: string;
-  type: "text" | "number" | "date" | "url" | "textarea";
+  type: "text" | "number" | "date" | "url" | "textarea" | "select";
+  options?: string[];
   required?: boolean;
 };
 
@@ -56,9 +57,37 @@ const audienceFields: FieldConfig[] = [
   { key: "average_watch_time", label: "Average watch time", type: "number" },
   { key: "audience_men", label: "Audience (Men)", type: "number" },
   { key: "audience_women", label: "Audience (Women)", type: "number" },
-  { key: "audience_country", label: "Audience (Country)", type: "text" },
-  { key: "audience_age", label: "Audience (Age)", type: "text" },
-  { key: "top_source_of_views", label: "Top source of views", type: "text" }
+  {
+    key: "audience_country",
+    label: "Audience (Country)",
+    type: "select",
+    options: [
+      "United States",
+      "United Kingdom",
+      "Canada",
+      "Australia",
+      "India",
+      "Germany",
+      "France",
+      "Italy",
+      "Spain",
+      "Brazil",
+      "Mexico",
+      "N/A"
+    ]
+  },
+  {
+    key: "audience_age",
+    label: "Audience (Age)",
+    type: "select",
+    options: ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+", "N/A"]
+  },
+  {
+    key: "top_source_of_views",
+    label: "Top source of views",
+    type: "select",
+    options: ["Reels tab", "Explore", "Profile", "Feed", "N/A"]
+  }
 ];
 
 const secFields: FieldConfig[] = Array.from({ length: 91 }, (_, second) => ({
@@ -145,6 +174,19 @@ export default function Home() {
               value={form[field.key]}
               onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
             />
+          ) : field.type === "select" ? (
+            <select
+              required={field.required}
+              value={form[field.key]}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+            >
+              <option value="">Select...</option>
+              {(field.options ?? []).map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           ) : (
             <input
               type={field.type}
